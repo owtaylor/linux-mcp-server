@@ -39,6 +39,7 @@ from linux_mcp_server.target_host import restrict
 from linux_mcp_server.target_host import target_host_instructions
 from linux_mcp_server.toolset import get_toolset
 from linux_mcp_server.toolset import Toolset as ToolsetInfo
+from linux_mcp_server.utils.pcp import PCP_GUIDE_URI
 from linux_mcp_server.utils.types import LOCALHOST
 
 
@@ -80,6 +81,7 @@ These tools map to seven areas:
 - **Service names:** automatically append '.service' suffix if not provided
 - **File paths:** must be absolute
 - **Large results:** When a tool's description says its result is very large, delegate that call to a subagent if you can, and have the subagent return only the specific items you need rather than the full output.
+- **PCP metric names:** Before investigating performance with the PCP tools, read the `docs://pcp` resource. It lists the metrics recorded on a typical system and explains how to read the values returned. Do not guess metric names from memory.
 """
 
 INSTRUCTIONS_RUN_SCRIPT = """You have access to tools that validate and execute Python or Bash scripts you supply on the target system, for inspection or for making changes.
@@ -163,6 +165,7 @@ These tools map to seven areas:
 - **Service names:** automatically append '.service' suffix if not provided
 - **File paths:** must be absolute
 - **Large results:** When a tool's description says its result is very large, delegate that call to a subagent if you can, and have the subagent return only the specific items you need rather than the full output.
+- **PCP metric names:** Before investigating performance with the PCP tools, read the `docs://pcp` resource. It lists the metrics recorded on a typical system and explains how to read the values returned. Do not guess metric names from memory.
 """
 
 
@@ -204,6 +207,20 @@ def run_script_app_html() -> ResourceResult:
     js = ui_dir.joinpath("run-script-app.js").read_text()
     html = html.replace("/* __CSS__ */", css).replace("/* __JS__ */", js)
     return ResourceResult(contents=[ResourceContent(html, mime_type=MCP_APP_MIME_TYPE)])
+
+
+@mcp.resource(
+    PCP_GUIDE_URI,
+    name="PCP metrics guide",
+    description=(
+        "Catalog of the PCP metrics recorded on a typical Linux system, and how to read the "
+        "values the PCP tools return. Read this before investigating performance with PCP."
+    ),
+    mime_type="text/markdown",
+    tags={"fixed", "performance", "pcp"},
+)
+def pcp_guide() -> str:
+    return resources.files(linux_mcp_server).joinpath("resources/pcp-guide.md").read_text()
 
 
 from linux_mcp_server.tools import *  # noqa: E402, F403

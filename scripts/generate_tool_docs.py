@@ -58,8 +58,16 @@ MODULE_CATEGORIES: dict[str, tuple[int, str, str, str]] = {
         "storage",
         "Tools for inspecting block devices, directories, files, and file contents.",
     ),
-    "linux_mcp_server.tools.run_script": (
+    "linux_mcp_server.tools.pcp": (
         6,
+        "Performance (PCP)",
+        "performance",
+        "Tools for querying historical performance data from Performance Co-Pilot archives. "
+        "The server also publishes a `docs://pcp` resource listing the metrics recorded on a "
+        "typical system and explaining how to read the values these tools return.",
+    ),
+    "linux_mcp_server.tools.run_script": (
+        7,
         "Script Execution",
         "script-execution",
         "Tools for running scripts on the target system. "

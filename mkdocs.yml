@@ -75,6 +75,7 @@ nav:
       - Logs: tools/logs.md
       - Network: tools/network.md
       - Storage: tools/storage.md
+      - Performance (PCP): tools/performance.md
       - Script Execution: tools/script-execution.md
   - Contributing: contributing.md
 

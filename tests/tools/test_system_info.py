@@ -7,6 +7,8 @@ import pytest
 
 from fastmcp import exceptions
 
+from linux_mcp_server.utils.pcp import PCP_GUIDE_URI
+
 
 @pytest.fixture
 def mock_execute(mock_execute_with_fallback_for):
@@ -356,11 +358,19 @@ class TestPcpStatus:
             {"start": "2023-12-31T19:00:00-05:00", "end": "2023-12-31T21:00:00-05:00"}
         ]
 
+    async def test_points_at_the_metrics_guide(self, mcp_client, mock_execute, pcp_archive_output):
+        """The guide pointer rides along with the news that PCP is usable."""
+        pcp = await self.call(mcp_client, mock_execute, {"pmdumplog": (0, pcp_archive_output, "")})
+
+        assert PCP_GUIDE_URI in pcp["metrics_guide"]
+
     async def test_reports_pcp_absent(self, mcp_client, mock_execute):
         pcp = await self.call(mcp_client, mock_execute, {"which": (1, "", "")})
 
         assert pcp["installed"] is False
         assert pcp["available_time_ranges"] is None
+        # Nothing to read the guide for, so don't spend context pointing at it.
+        assert pcp["metrics_guide"] is None
 
     async def test_a_failing_check_is_not_fatal(self, mcp_client, mock_execute):
         pcp = await self.call(mcp_client, mock_execute, {"systemctl": RuntimeError("Raised intentionally")})

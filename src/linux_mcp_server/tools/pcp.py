@@ -16,6 +16,7 @@ from linux_mcp_server.commands import get_command
 from linux_mcp_server.parsers import parse_pmrep_csv
 from linux_mcp_server.server import mcp
 from linux_mcp_server.utils.pcp import discover_timezone_name
+from linux_mcp_server.utils.pcp import PCP_GUIDE_URI
 from linux_mcp_server.utils.pcp import pmlogger_archive_dir
 from linux_mcp_server.utils.timespec import parse_time_spec
 from linux_mcp_server.utils.timespec import resolve_pcp_window
@@ -51,6 +52,8 @@ async def _target_timezone(host: str) -> tzinfo:
     title="List available PCP metrics",
     description=(
         "Returns every PCP metric available on the system with its description. "
+        f"Prefer the {PCP_GUIDE_URI} resource, which covers the commonly needed metrics; "
+        "use this only for a subsystem the guide does not cover. "
         "The result is very large, delegate this call to a subagent and have it return only "
         "the metric names you need. Call it directly only if delegation is unavailable. "
         "Use only if get_system_information() indicates PCP is available."
@@ -82,6 +85,8 @@ async def pcp_list_metrics(
     description=(
         "Retrieves historical metric data from PCP archives as JSON samples. "
         "Supply start_time, end_time and interval together to get exactly the range requested. "
+        f"Read the {PCP_GUIDE_URI} resource first for the metric catalog and how to read the values; "
+        "do not guess metric names. "
         "Use only if get_system_information() indicates PCP is available."
     ),
     tags={"fixed", "performance", "pcp"},

@@ -16,6 +16,10 @@ from linux_mcp_server.utils.validation import is_successful_output
 
 logger = logging.getLogger(__name__)
 
+#: Resource holding the metric catalog and query semantics. Models otherwise invent
+#: metric names from memory, and pcp_list_metrics is far too large to use as a lookup.
+PCP_GUIDE_URI = "docs://pcp"
+
 #: inst [<id> or "<name>"] value "<v>"
 _ARCHIVE_INSTANCE = re.compile(r'inst \[\d+ or "([^"]+)"\] value "([^"]+)"')
 
