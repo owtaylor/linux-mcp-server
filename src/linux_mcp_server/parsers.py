@@ -425,6 +425,31 @@ def parse_pmrep_csv(stdout: str, tz: tzinfo | None = None) -> list[PCPSample]:
     return samples
 
 
+#: ``pminfo -t`` prints one "<metric name> [<help text>]" per line, and drops the
+#: bracketed part for a metric the PMDA ships no help text for. Read from an archive
+#: it says so inline instead, since an archive carries only the text pmlogger
+#: recorded; the metric is no less real for it, so keep the name and lose the text.
+_PMINFO_ENTRY = re.compile(
+    r"(?P<name>[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)*)"
+    r"(?: \[(?P<description>.*)\]| One-line Help: Error: .*)?$"
+)
+
+
+def parse_pminfo_listing(stdout: str) -> dict[str, str]:
+    """Parse ``pminfo -t`` output into metric names mapped to their help text.
+
+    pminfo's own ordering is kept rather than sorted, because it walks the
+    namespace depth first and so groups related metrics together.
+    """
+    metrics: dict[str, str] = {}
+
+    for line in stdout.splitlines():
+        if match := _PMINFO_ENTRY.fullmatch(line.strip()):
+            metrics[match["name"]] = match["description"] or ""
+
+    return metrics
+
+
 def _localize_pmrep_time(stamp: str, tz: tzinfo | None) -> str:
     """Convert a UTC pmrep timestamp into an RFC-3339 string in ``tz``."""
     if tz is None:

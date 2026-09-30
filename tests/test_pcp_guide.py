@@ -32,7 +32,9 @@ LIVE_ONLY = {
 
 
 def _read_names(filename: str) -> set[str]:
-    return set((DATA_DIR / filename).read_text().split())
+    """The metric names in a captured pminfo listing, dropping any help text."""
+    lines = (DATA_DIR / filename).read_text().splitlines()
+    return {line.split(maxsplit=1)[0] for line in lines if line.strip()}
 
 
 @pytest.fixture(scope="module")

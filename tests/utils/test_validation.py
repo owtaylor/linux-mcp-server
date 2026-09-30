@@ -8,6 +8,7 @@ from linux_mcp_server.utils.validation import is_empty_output
 from linux_mcp_server.utils.validation import is_successful_output
 from linux_mcp_server.utils.validation import PathValidationError
 from linux_mcp_server.utils.validation import validate_path
+from linux_mcp_server.utils.validation import validate_pcp_prefix
 
 
 class TestIsEmptyOutput:
@@ -150,3 +151,32 @@ class TestValidatePath:
         """Paths containing '..' components are rejected to prevent path traversal."""
         with pytest.raises(PathValidationError, match=r"invalid component '\.\.'"):
             validate_path(path)
+
+
+class TestValidatePcpPrefix:
+    @pytest.mark.parametrize("prefix", ["mem", "disk.dev", "mem.util.committed_AS", "nfs4.server", "x"])
+    def test_accepts_a_pmns_name(self, prefix):
+        assert validate_pcp_prefix(prefix) == prefix
+
+    @pytest.mark.parametrize(
+        "prefix",
+        [
+            pytest.param("-h", id="flag"),
+            pytest.param("--archive=/tmp/x", id="long-flag"),
+            pytest.param("mem; rm -rf /", id="shell-metacharacters"),
+            pytest.param("mem util", id="space"),
+            pytest.param("mem\nutil", id="newline"),
+            pytest.param("mem/util", id="slash"),
+            pytest.param("", id="empty"),
+            pytest.param("1mem", id="leading-digit"),
+        ],
+    )
+    def test_rejects_anything_that_could_reach_pminfo_as_an_option(self, prefix):
+        with pytest.raises(ValueError, match="Invalid PCP namespace prefix"):
+            validate_pcp_prefix(prefix)
+
+    @pytest.mark.parametrize("prefix", ["mem.", ".mem", "mem..util"])
+    def test_rejects_an_empty_component(self, prefix):
+        """A prefix is split on dots to find its depth, so an empty component addresses the wrong node."""
+        with pytest.raises(ValueError, match="Invalid PCP namespace prefix"):
+            validate_pcp_prefix(prefix)

@@ -5,6 +5,10 @@ from pathlib import Path
 
 _PCP_METRIC_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.]*$")
 
+#: Stricter than a metric name: a prefix is split on dots to walk the namespace,
+#: so an empty component would silently address the wrong node.
+_PCP_PREFIX_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)*")
+
 
 class PathValidationError(ValueError):
     """Raised when path validation fails.
@@ -88,6 +92,27 @@ def validate_pcp_metrics(metrics: list[str]) -> tuple[str, ...]:
             )
 
     return tuple(metrics)
+
+
+def validate_pcp_prefix(prefix: str) -> str:
+    """Validate a PCP namespace prefix to prevent option injection.
+
+    Args:
+        prefix: A dotted PMNS node name, such as "mem" or "disk.dev".
+
+    Returns:
+        The validated prefix.
+
+    Raises:
+        ValueError: If the prefix is not a dotted PMNS name.
+    """
+    if not _PCP_PREFIX_RE.fullmatch(prefix):
+        raise ValueError(
+            f"Invalid PCP namespace prefix: {prefix!r}. A prefix is a dotted name such as "
+            "'mem' or 'disk.dev', made up of letters, digits and underscores."
+        )
+
+    return prefix
 
 
 def is_empty_output(stdout: str | None) -> bool:

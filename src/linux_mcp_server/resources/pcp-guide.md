@@ -15,8 +15,9 @@ no data, so take names from the catalog below rather than recalling them from me
    know which subsystem is at fault.
 3. `pcp_query_metrics` — a time series of specific metrics. Use it once you know what
    to look at.
-4. `pcp_list_metrics` — every metric the system knows about. Very large output; use it
-   only for something this guide does not cover.
+4. `pcp_list_metrics` — browse the metric namespace for something this guide does not
+   cover. It lists one level at a time, so start broad and drill in, and it lists only
+   what this system records, so everything in it can be queried.
 
 ## Time arguments
 
@@ -293,11 +294,18 @@ Constant or slow-changing values, useful for turning rates into ratios.
 
 ## If a metric you need is not listed
 
-Anything outside this catalog — XFS internals, NFS, KVM, cgroups, containers, IPC,
-per-CPU interrupts, SCSI or fibre channel — is reachable through `pcp_list_metrics`,
-but its output is very large. Narrow the problem with the metrics above first, then
-consult it only for the specific subsystem you have identified.
+Anything outside this catalog — XFS internals, NFS, KVM, IPC, per-CPU interrupts,
+SCSI or fibre channel — may still be reachable through `pcp_list_metrics`. Call it
+with no prefix for the top-level namespaces, then again with the one you want in
+order to see inside it. Narrow the problem down with the metrics above first, so
+that you know which subsystem to browse.
 
-A metric here returning no data means its PMDA is not loaded, or `pmlogger` was not
-configured to record it on this system. Fall back to the closest metric that does
-return data rather than retrying variations on the name.
+`pcp_list_metrics` lists only what this system's `pmlogger` records, which is what
+`pcp_query_metrics` can return. That is well under half of what PCP defines, and
+whole subsystems of it: on a default configuration cgroups, containers, process
+accounting and per-process `hotproc` metrics are not recorded at all. A subsystem
+missing from the listing has no history to query, so do not guess names into it.
+
+A metric marked `[live only]` above, or absent from the listing, returns no data
+historically. Fall back to the closest metric that does return data rather than
+retrying variations on the name.
