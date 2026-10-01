@@ -40,6 +40,7 @@ FIXED_TOOLS = set(
         "list_files",
         "list_processes",
         "list_services",
+        "pcp_guide",
         "pcp_list_metrics",
         "pcp_performance_summary",
         "pcp_query_metrics",

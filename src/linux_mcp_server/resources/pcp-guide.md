@@ -6,6 +6,10 @@ so you can see what a system was doing hours or days ago, not just now.
 Metric names are exact strings. A plausible-looking but wrong name returns an error or
 no data, so take names from the catalog below rather than recalling them from memory.
 
+This text is served twice over, as the `docs://pcp` resource and by the `pcp_guide`
+tool, so that whichever one a client makes easy is enough. They are identical; having
+read one, do not fetch the other.
+
 ## Choosing a tool
 
 1. `get_system_information` — reports whether PCP is installed and running, and what

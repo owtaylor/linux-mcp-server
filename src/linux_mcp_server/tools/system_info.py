@@ -21,7 +21,7 @@ from linux_mcp_server.parsers import parse_pcp_archive_ranges
 from linux_mcp_server.parsers import parse_system_info
 from linux_mcp_server.server import mcp
 from linux_mcp_server.utils.pcp import discover_timezone_name
-from linux_mcp_server.utils.pcp import PCP_GUIDE_URI
+from linux_mcp_server.utils.pcp import PCP_GUIDE_REFERENCE
 from linux_mcp_server.utils.pcp import pmlogger_archive_dir
 from linux_mcp_server.utils.types import Host
 from linux_mcp_server.utils.validation import is_successful_output
@@ -67,7 +67,7 @@ async def _get_pcp_status(host: Host) -> PCPStatus:
         pmlogger_running=results["pmlogger_running"],
         available_time_ranges=available_time_ranges,
         metrics_guide=(
-            f"Read the {PCP_GUIDE_URI} resource for available metric names and how to query them."
+            f"Read the {PCP_GUIDE_REFERENCE} for available metric names and how to query them."
             if results["installed"]
             else None
         ),

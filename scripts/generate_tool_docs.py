@@ -63,8 +63,8 @@ MODULE_CATEGORIES: dict[str, tuple[int, str, str, str]] = {
         "Performance (PCP)",
         "performance",
         "Tools for querying historical performance data from Performance Co-Pilot archives. "
-        "The server also publishes a `docs://pcp` resource listing the metrics recorded on a "
-        "typical system and explaining how to read the values these tools return.",
+        "The metrics guide that `pcp_guide` returns is also published as a `docs://pcp` "
+        "resource, for clients that prefer to read it that way.",
     ),
     "linux_mcp_server.tools.run_script": (
         7,

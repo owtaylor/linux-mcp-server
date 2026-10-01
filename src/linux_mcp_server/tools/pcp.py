@@ -18,8 +18,10 @@ from linux_mcp_server.parsers import parse_pminfo_listing
 from linux_mcp_server.parsers import parse_pmrep_csv
 from linux_mcp_server.server import mcp
 from linux_mcp_server.utils.pcp import discover_timezone_name
+from linux_mcp_server.utils.pcp import PCP_GUIDE_REFERENCE
 from linux_mcp_server.utils.pcp import PCP_GUIDE_URI
 from linux_mcp_server.utils.pcp import pmlogger_archive_dir
+from linux_mcp_server.utils.pcp import read_pcp_guide
 from linux_mcp_server.utils.pmns import collapse_metric_tree
 from linux_mcp_server.utils.timespec import parse_time_spec
 from linux_mcp_server.utils.timespec import resolve_pcp_window
@@ -53,6 +55,30 @@ async def _target_timezone(host: str) -> tzinfo:
 
 
 @mcp.tool(
+    title="Read the PCP metrics guide",
+    description=(
+        "Returns the PCP metrics guide: a catalog of the metric names recorded on a typical "
+        "Linux system, and how to read the values the other PCP tools return. Read it before "
+        "investigating performance with PCP, and take metric names from it rather than from "
+        f"memory. This returns exactly the text of the {PCP_GUIDE_URI} resource, so read "
+        "whichever of the two is easier; there is nothing to gain by taking both."
+    ),
+    tags={"fixed", "performance", "pcp"},
+    annotations=ToolAnnotations(readOnlyHint=True),
+)
+@log_tool_call
+async def pcp_guide(
+    *,
+    # The guide is shipped with the server and says nothing about any particular
+    # system, but every tool is dispatched and authorized by target host, so it
+    # is asked for here too rather than made an exception of.
+    host: Host,
+) -> str:
+    """Return the shipped PCP metrics guide."""
+    return read_pcp_guide()
+
+
+@mcp.tool(
     title="List available PCP metrics",
     description=(
         "Browses the PCP metric namespace. Lists the metrics under 'prefix' with their "
@@ -60,7 +86,7 @@ async def _target_timezone(host: str) -> tzinfo:
         "many metrics it holds; call again with that name as the prefix to see inside it. "
         "Only metrics this system's pmlogger records are listed, so everything listed can be "
         "passed to pcp_query_metrics. "
-        f"The {PCP_GUIDE_URI} resource already names the commonly needed metrics, so reach for "
+        f"The {PCP_GUIDE_REFERENCE} already names the commonly needed metrics, so reach for "
         "this when you need a subsystem the guide does not cover. "
         "Use only if get_system_information() indicates PCP is available."
     ),
@@ -121,7 +147,7 @@ async def pcp_list_metrics(
     description=(
         "Retrieves historical metric data from PCP archives as JSON samples. "
         "Supply start_time, end_time and interval together to get exactly the range requested. "
-        f"Read the {PCP_GUIDE_URI} resource first for the metric catalog and how to read the values; "
+        f"Read the {PCP_GUIDE_REFERENCE} first for the metric catalog and how to read the values; "
         "do not guess metric names. "
         "Use only if get_system_information() indicates PCP is available."
     ),

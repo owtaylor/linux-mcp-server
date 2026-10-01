@@ -39,7 +39,9 @@ from linux_mcp_server.target_host import restrict
 from linux_mcp_server.target_host import target_host_instructions
 from linux_mcp_server.toolset import get_toolset
 from linux_mcp_server.toolset import Toolset as ToolsetInfo
+from linux_mcp_server.utils.pcp import PCP_GUIDE_TOOL
 from linux_mcp_server.utils.pcp import PCP_GUIDE_URI
+from linux_mcp_server.utils.pcp import read_pcp_guide
 from linux_mcp_server.utils.types import LOCALHOST
 
 
@@ -81,7 +83,7 @@ These tools map to seven areas:
 - **Service names:** automatically append '.service' suffix if not provided
 - **File paths:** must be absolute
 - **Large results:** When a tool's description says its result is very large, delegate that call to a subagent if you can, and have the subagent return only the specific items you need rather than the full output.
-- **PCP metric names:** Before investigating performance with the PCP tools, read the `docs://pcp` resource. It lists the metrics recorded on a typical system and explains how to read the values returned. Do not guess metric names from memory.
+- **PCP metric names:** Before investigating performance with the PCP tools, read the `docs://pcp` resource, or call the `pcp_guide` tool, which returns the same text. Either one lists the metrics recorded on a typical system and explains how to read the values returned; there is no point in taking both. Do not guess metric names from memory.
 """
 
 INSTRUCTIONS_RUN_SCRIPT = """You have access to tools that validate and execute Python or Bash scripts you supply on the target system, for inspection or for making changes.
@@ -165,7 +167,7 @@ These tools map to seven areas:
 - **Service names:** automatically append '.service' suffix if not provided
 - **File paths:** must be absolute
 - **Large results:** When a tool's description says its result is very large, delegate that call to a subagent if you can, and have the subagent return only the specific items you need rather than the full output.
-- **PCP metric names:** Before investigating performance with the PCP tools, read the `docs://pcp` resource. It lists the metrics recorded on a typical system and explains how to read the values returned. Do not guess metric names from memory.
+- **PCP metric names:** Before investigating performance with the PCP tools, read the `docs://pcp` resource, or call the `pcp_guide` tool, which returns the same text. Either one lists the metrics recorded on a typical system and explains how to read the values returned; there is no point in taking both. Do not guess metric names from memory.
 """
 
 
@@ -214,13 +216,15 @@ def run_script_app_html() -> ResourceResult:
     name="PCP metrics guide",
     description=(
         "Catalog of the PCP metrics recorded on a typical Linux system, and how to read the "
-        "values the PCP tools return. Read this before investigating performance with PCP."
+        "values the PCP tools return. Read this before investigating performance with PCP. "
+        f"The {PCP_GUIDE_TOOL} tool returns the same text, for clients that cannot read "
+        "resources; there is nothing to gain by taking both."
     ),
     mime_type="text/markdown",
     tags={"fixed", "performance", "pcp"},
 )
-def pcp_guide() -> str:
-    return resources.files(linux_mcp_server).joinpath("resources/pcp-guide.md").read_text()
+def pcp_guide_resource() -> str:
+    return read_pcp_guide()
 
 
 from linux_mcp_server.tools import *  # noqa: E402, F403

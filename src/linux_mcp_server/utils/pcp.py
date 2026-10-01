@@ -1,13 +1,17 @@
-"""Discovery of the target system's PCP setup.
+"""The PCP metrics guide, and discovery of the target system's PCP setup.
 
-Both helpers ask the target rather than infer anything locally: the timezone
-its clock runs on, and the directory its primary pmlogger writes to.
+The two discovery helpers ask the target rather than infer anything locally:
+the timezone its clock runs on, and the directory its primary pmlogger writes to.
 """
 
 import logging
 import re
 
+from importlib import resources
+
 from fastmcp.exceptions import ToolError
+
+import linux_mcp_server
 
 from linux_mcp_server.commands import get_command
 from linux_mcp_server.commands import get_command_group
@@ -20,8 +24,24 @@ logger = logging.getLogger(__name__)
 #: metric names from memory, and pcp_list_metrics is far too large to use as a lookup.
 PCP_GUIDE_URI = "docs://pcp"
 
+#: The same text, as a tool. Some clients never surface resources to the model at
+#: all, and others make reaching for one hard enough that a less capable model
+#: skips it and guesses metric names instead, which is what the guide exists to stop.
+PCP_GUIDE_TOOL = "pcp_guide"
+
+#: How to name both wherever a tool description points at the guide, since a caller
+#: wants whichever of the two its client makes easy and neither one twice.
+PCP_GUIDE_REFERENCE = f"{PCP_GUIDE_URI} resource (or the identical {PCP_GUIDE_TOOL} tool)"
+
+_PCP_GUIDE_FILE = "resources/pcp-guide.md"
+
 #: inst [<id> or "<name>"] value "<v>"
 _ARCHIVE_INSTANCE = re.compile(r'inst \[\d+ or "([^"]+)"\] value "([^"]+)"')
+
+
+def read_pcp_guide() -> str:
+    """The shipped metric catalog and query semantics, as markdown."""
+    return resources.files(linux_mcp_server).joinpath(_PCP_GUIDE_FILE).read_text()
 
 
 async def discover_timezone_name(host: str) -> str | None:

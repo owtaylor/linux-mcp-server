@@ -1,4 +1,4 @@
-"""Tests for the docs://pcp metrics guide resource.
+"""Tests for the PCP metrics guide, served as a resource and as a tool.
 
 The guide exists so models stop inventing PCP metric names, so the name checks
 below are the point of this file: a name that drifts out of the real PMNS makes
@@ -13,7 +13,9 @@ from pathlib import Path
 
 import pytest
 
+from linux_mcp_server.utils.pcp import PCP_GUIDE_TOOL
 from linux_mcp_server.utils.pcp import PCP_GUIDE_URI
+from linux_mcp_server.utils.pcp import read_pcp_guide
 
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -39,9 +41,7 @@ def _read_names(filename: str) -> set[str]:
 
 @pytest.fixture(scope="module")
 def guide() -> str:
-    from linux_mcp_server.server import pcp_guide
-
-    return pcp_guide()
+    return read_pcp_guide()
 
 
 @pytest.fixture(scope="module")
@@ -190,3 +190,34 @@ async def test_guide_is_readable(mcp_client):
     assert len(result) == 1
     assert result[0].mimeType == "text/markdown"
     assert "# Performance Co-Pilot (PCP) metrics guide" in result[0].text
+
+
+async def test_the_tool_returns_the_same_guide(mcp_client, guide: str):
+    """A tool as well as a resource because some clients make a resource hard to
+    reach, and a model that cannot reach the guide goes back to guessing names."""
+    result = await mcp_client.call_tool("pcp_guide", {"host": "localhost"})
+
+    assert result.content[0].text == guide
+
+
+async def test_everything_that_cites_the_guide_names_both_ways_in(mcp_client, guide: str):
+    """The two are interchangeable, and a client that cannot reach one can reach the
+    other, so a pointer to the resource alone leaves such a client with nothing.
+
+    The guide tool is the one exception: its own description need not name itself.
+    """
+    from linux_mcp_server import server
+
+    texts = {
+        "the guide itself": guide,
+        **{name: text for name, text in vars(server).items() if name.startswith("INSTRUCTIONS_")},
+    }
+    for component in [*await mcp_client.list_tools(), *await mcp_client.list_resources()]:
+        if component.name != PCP_GUIDE_TOOL:
+            texts[component.name] = component.description or ""
+
+    citing = {where: text for where, text in texts.items() if PCP_GUIDE_URI in text}
+    assert citing, "nothing points at the guide at all"
+
+    silent = sorted(where for where, text in citing.items() if PCP_GUIDE_TOOL not in text)
+    assert silent == [], f"these cite the resource but not the tool: {silent}"
