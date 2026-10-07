@@ -1,0 +1,268 @@
+name: Security updates
+
+# Renovate's pep621 manager only extracts direct dependencies, so a
+# vulnerability in an indirect dependency goes unfixed until the weekly lock
+# file maintenance run (renovatebot/renovate#6377). This workflow closes that
+# gap: it audits uv.lock daily and opens one PR per vulnerable package, with
+# the CVE ids in the commit message so downstream RPM rebuilds can be tracked
+# from `git log`. Remove it once the MintMaker fork of Renovate can update
+# indirect dependencies itself.
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-updates
+  cancel-in-progress: false
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: 1
+  FORCE_COLOR: 1
+  # `uv audit --output-format=json` is a preview feature whose schema may
+  # change without warning, so pin uv here rather than floating to latest the
+  # way the other workflows do. (`--output-format` needs uv >= 0.12.)
+  UV_VERSION: "0.12.23"
+  # Not python-version-file: requires-python is >=3.10, and
+  # scripts/security_updates.py uses tomllib (3.11+).
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  audit:
+    name: Audit uv.lock
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      found: ${{ steps.select.outputs.found }}
+      updates: ${{ steps.select.outputs.updates }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          prune-cache: false
+
+      - name: Audit uv.lock
+        run: |
+          set +e
+          uv audit --frozen --preview-features audit-command,json-output --output-format=json > audit.json
+          status=$?
+          set -e
+          # `uv audit` exits 1 when it finds vulnerabilities, which is the case
+          # this workflow exists to handle. Anything above that is a real
+          # failure (and a truncated audit.json fails the next step anyway).
+          if [ "$status" -gt 1 ]; then
+            echo "::error::uv audit failed (exit $status)"
+            exit "$status"
+          fi
+
+      - name: Select packages to update
+        id: select
+        run: python3 scripts/security_updates.py select --audit audit.json --output security-updates.json
+
+      - name: Upload the pending updates
+        if: steps.select.outputs.found == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: security-updates
+          path: security-updates.json
+
+  # Resolves and builds with no write-capable credentials in reach: `uv lock`
+  # and slushy-build both compile sdists, which is arbitrary third-party code.
+  # The privileged push happens in `pr` below, which runs first-party code
+  # only -- the same split the dependency canary uses.
+  fix:
+    name: Fix ${{ matrix.update.package }}
+    needs: audit
+    if: needs.audit.outputs.found == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        update: ${{ fromJSON(needs.audit.outputs.updates) }}
+
+    env:
+      # Package names come from the advisory feed; keep them out of the shell
+      # command lines that interpolate ${{ }}.
+      PACKAGE: ${{ matrix.update.package }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          prune-cache: false
+
+      - name: Download the pending updates
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: security-updates
+
+      # pyproject.toml sets a global `exclude-newer` cooldown, which would
+      # otherwise hide a fix published inside that window -- exactly the
+      # releases this workflow is chasing. A per-package waiver has to live in
+      # pyproject.toml rather than on the command line: passing
+      # --exclude-newer-package makes the result fail `uv lock --check`, and
+      # every other workflow installs with --locked.
+      - name: Waive the cooldown
+        run: python3 scripts/security_updates.py bypass-cooldown --package "$PACKAGE"
+
+      - name: Update the lock file
+        run: uv lock --upgrade-package "$PACKAGE"
+
+      - name: Re-audit uv.lock
+        run: |
+          set +e
+          uv audit --frozen --preview-features audit-command,json-output --output-format=json > audit-after.json
+          status=$?
+          set -e
+          if [ "$status" -gt 1 ]; then
+            echo "::error::uv audit failed (exit $status)"
+            exit "$status"
+          fi
+
+      # Fails when the upgrade did not actually clear the advisory, which in
+      # practice means a cap in pyproject.toml is holding the package below the
+      # fixed version. Better to fail the run than to open a PR labelled
+      # `security` that fixes nothing.
+      - name: Verify the advisories are resolved
+        run: python3 scripts/security_updates.py verify --package "$PACKAGE" --audit audit-after.json
+
+      - name: Sync Konflux prefetch inputs
+        run: make requirements-lock
+
+      - name: Commit the update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 scripts/security_updates.py commit-message \
+            --package "$PACKAGE" --updates security-updates.json > "$RUNNER_TEMP/message.txt"
+          # Stage only the paths this job owns: scoping the add keeps the audit
+          # JSON out of the commit, and staging rather than plain `git diff`
+          # catches the new files slushy-build can generate under .konflux.
+          git add -A pyproject.toml uv.lock .konflux .tekton
+          git commit -F "$RUNNER_TEMP/message.txt"
+          git --no-pager show --stat
+          git format-patch -1 --stdout > "$RUNNER_TEMP/update.patch"
+
+      - name: Upload the update
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: patch-${{ matrix.update.slug }}
+          path: ${{ runner.temp }}/update.patch
+
+  # Holds the only write-capable credential in the workflow and runs no
+  # third-party code: a checkout, an artifact download, git, and gh. An app
+  # token rather than GITHUB_TOKEN so the PRs it opens trigger CI (and
+  # update-python-requirements.yml, which should find nothing left to do).
+  pr:
+    name: Open pull requests
+    needs: [audit, fix]
+    if: ${{ !cancelled() && needs.audit.result == 'success' && needs.audit.outputs.found == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Generate an app token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.AUDIT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUDIT_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      # `fail-fast: false` means a package that could not be fixed leaves the
+      # others' patches intact, so take whatever did get produced.
+      - name: Download the updates
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: patch-*
+          path: ${{ runner.temp }}/patches
+
+      - name: Open or update a pull request per package
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PATCHES: ${{ runner.temp }}/patches
+        run: |
+          shopt -s nullglob
+          patches=("$PATCHES"/patch-*/update.patch)
+          if [ ${#patches[@]} -eq 0 ]; then
+            echo "::notice::No updates were produced; nothing to open."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          failed=()
+          for patch in "${patches[@]}"; do
+            slug=$(basename "$(dirname "$patch")")
+            slug=${slug#patch-}
+            branch="security/uv-lock-$slug"
+
+            # Each patch was built on $GITHUB_SHA, so branch from there rather
+            # than from whatever the previous iteration left checked out.
+            git checkout --quiet -B "$branch" "$GITHUB_SHA"
+            if ! git am "$patch"; then
+              git am --abort || true
+              echo "::error::$slug: the update no longer applies to $GITHUB_SHA"
+              failed+=("$slug")
+              continue
+            fi
+
+            # Force-push so a rerun updates the open PR in place instead of
+            # filing a duplicate every morning until the first one merges.
+            git push --force origin "HEAD:refs/heads/$branch"
+
+            title=$(git log -1 --format=%s)
+            body=$(git log -1 --format=%b)
+            if [ -n "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
+              gh pr edit "$branch" --title "$title" --body "$body"
+              echo "Updated the open pull request for $slug."
+            else
+              gh pr create --base "$GITHUB_REF_NAME" --head "$branch" \
+                --title "$title" --body "$body" \
+                --label security --label dependencies
+            fi
+          done
+
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "::error::Could not open pull requests for: ${failed[*]}"
+            exit 1
+          fi
